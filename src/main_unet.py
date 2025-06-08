@@ -24,8 +24,8 @@ val_set = ADNIDataset(
 )
 
 # create dataloaders
-train_loader = DataLoader(train_set, batch_size=2, shuffle=True, num_workers=16)
-val_loader = DataLoader(val_set, batch_size=2, shuffle=False, num_workers=16)
+train_loader = DataLoader(train_set, batch_size=2, shuffle=True, num_workers=4)
+val_loader = DataLoader(val_set, batch_size=2, shuffle=False, num_workers=4)
 
 # class_count = np.zeros(3)
 
@@ -43,17 +43,20 @@ val_loader = DataLoader(val_set, batch_size=2, shuffle=False, num_workers=16)
 
 class_weights = torch.tensor([0.1, 0.45, 0.45])
 
+print(f"Class weights: {class_weights}")
 
 #%% ---------------------------------------------------------------------------------
 train_segmentation(
     model=UNet3D(in_channels=1, out_channels=3, base_filters=32),
     train_loader=train_loader,
     test_loader=val_loader,
-    epochs=70,
+    epochs=5,
     lr=1e-4,
     weight_decay=1e-5,
     weights=class_weights,
     save_path="../models/unet3d_adni.pth",
+    use_wandb=True,
+    run_name="test_wandb"
 )
 
 #%% ---------------------------------------------------------------------------------
@@ -63,7 +66,7 @@ import torchio as tio
 transform = tio.Compose([
     tio.RandomAffine(scales=(0.9, 1.1), degrees=10, p=0.75), # Random affine transformation (rotation and scaling on 75% of the data)
     tio.RandomElasticDeformation(num_control_points=7, max_displacement=7.5, p=0.5), # Random elastic deformation on 50% of the data
-    tio.RandomNoise(std=(0, 0.1), p=0.25), # Random noise on 25% of the data
+    tio.RandomNoise(std=(0, 0.01), p=0.25), # Random noise on 25% of the data
     tio.RandomBiasField(coefficients=0.5, p=0.2), # Random bias field on 20% of the data
 ])
 
@@ -100,6 +103,8 @@ train_segmentation(
     weight_decay=1e-5,
     weights=class_weights,
     save_path="../models/unet3d_adni_dataAug.pth",
+    use_wandb=True,
+    run_name="unet3d_adni_dataAug"
 )
 
 # %%

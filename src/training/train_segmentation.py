@@ -7,6 +7,7 @@ from monai.metrics import HausdorffDistanceMetric
 import torch.nn.functional as F
 import numpy as np
 import warnings
+import wandb
 
 warnings.filterwarnings(
     "ignore",
@@ -30,7 +31,7 @@ def center_crop_label(label, target_shape):
                     h_start:h_start + H_t,
                     w_start:w_start + W_t]
 
-def train_loop(epoch, model, optimizer, criterion, data_loader, device):
+def train_loop(epoch, model, optimizer, criterion, data_loader, device, use_wandb=False):
     # set model to training mode
     model.train()
     total_loss = 0.0
@@ -40,7 +41,7 @@ def train_loop(epoch, model, optimizer, criterion, data_loader, device):
 
     dice_sums = torch.zeros(3).to(device)
 
-    for batch_idx, (data, target) in enumerate(tqdm(data_loader, desc=f"Training Epoch {epoch}")):
+    for batch_idx, (data, target, means, stds) in enumerate(tqdm(data_loader, desc=f"Training Epoch {epoch}")):
         # Copy data to GPU if needed
         data = data.to(device)
         target = target.to(device)
@@ -72,6 +73,35 @@ def train_loop(epoch, model, optimizer, criterion, data_loader, device):
         batch_dice = dice_metric(pred_classes, label_cropped)  # Tensor [3] (per class)
         dice_sums += batch_dice
 
+        if use_wandb and batch_idx == 0:
+            # Extract one sample from the batch
+            img = data[0].detach().cpu().numpy()               # (C, D, H, W)
+            label = target[0].detach().cpu().numpy()            # (D, H, W)
+
+            img = np.squeeze(img)  # (D, H, W)
+            
+            D, H, W = img.shape
+
+            # undo normalization
+            img = img * stds[0].item() + means[0].item()  # Assuming means and stds are scalars for simplicity
+
+            slices = {
+                "axial":   (img[D // 2, :, :], label[D // 2, :, :]),
+                "coronal": (img[:, H // 2, :], label[:, H // 2, :]),
+                "sagittal":(img[:, :, W // 2], label[:, :, W // 2]),
+            }
+
+            for plane, (img_slice, label_slice) in slices.items():
+                
+                
+                wandb.log({
+                            f"{plane}_overlay": wandb.Image(
+                                img_slice,
+                                masks={"ground_truth": {"mask_data": label_slice}},
+                                caption=f"{plane} Overlay"
+                            )
+                        }, step=epoch)
+
     # Calculate average loss
     total_loss /= len(data_loader)
 
@@ -99,7 +129,7 @@ def validate_loop(epoch, model, criterion, data_loader, device):
     hausdorff_metric = HausdorffDistanceMetric(include_background=True, percentile=95, reduction='mean')
 
     with torch.no_grad():  # Disable gradient computation for validation
-        for data, target in tqdm(data_loader, desc=f"Validation Epoch {epoch}"):
+        for data, target,_ ,_ in tqdm(data_loader, desc=f"Validation Epoch {epoch}"):
             data = data.to(device)
             target = target.to(device)
 
@@ -146,12 +176,23 @@ def validate_loop(epoch, model, criterion, data_loader, device):
 
     return total_loss, avg_dices, mean_dice_all, mean_hd95
 
-def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loader, weights=None, save_path=None):
+def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loader, weights=None, save_path=None, use_wandb=False, run_name=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     unet = model.to(device)
     optimizer = torch.optim.Adam(unet.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
+
+    if use_wandb and run_name is not None:
+        wandb.init(project="VT1_Hippocampus_Segmentation", name=run_name,
+        config={
+            "lr": lr,
+            "weight_decay": weight_decay,
+            "epochs": epochs,
+            "optimizer": "Adam",
+            "loss": "CrossEntropyLoss",
+            "scheduler": "ReduceLROnPlateau"
+        })
 
     best_val_dice = float(0)
     best_model_epoch = 0
@@ -176,7 +217,7 @@ def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loade
 
     for epoch in range(1, epochs + 1):
         # Training
-        train_loss, train_avg_dices, train_mean_dice_all = train_loop(epoch, unet, optimizer, criterion, train_loader, device,)
+        train_loss, train_avg_dices, train_mean_dice_all = train_loop(epoch, unet, optimizer, criterion, train_loader, device, use_wandb=use_wandb)
         train_losses.append(train_loss)
         train_dices.append(train_avg_dices)
         train_mean_dices.append(train_mean_dice_all)
@@ -207,6 +248,19 @@ def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loade
         if patience_counter >= patience:
             print("Early stopping triggered.")
             break
+        
+        # If using wandb, log the final results
+        if use_wandb:
+            wandb.log({
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "train_dice_mean": train_mean_dice_all,
+                "val_loss": val_loss,
+                "val_dice_mean": val_mean_dice_all,
+                "val_hd95": val_mean_hd95,
+                **{f"train_dice_class_{i}": v for i, v in enumerate(train_avg_dices)},
+                **{f"val_dice_class_{i}": v for i, v in enumerate(val_avg_dices)}
+            })
 
     # print final results
     print(f"Training:")
@@ -221,5 +275,3 @@ def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loade
         print(f"    - Class {i} Dice: {dice:.4f}")
     print(f"    - Mean Dice across all classes: {val_mean_dices[best_model_epoch]:.4f}\n")
     print(f"    - Mean HD95: {val_hd95s[best_model_epoch]:.4f}\n")
-
-    plot_segmentation_results(train_losses[:best_model_epoch], train_dices[:best_model_epoch], train_mean_dices[:best_model_epoch], val_losses[:best_model_epoch], val_dices[:best_model_epoch], val_mean_dices[:best_model_epoch], val_hd95s[:best_model_epoch])

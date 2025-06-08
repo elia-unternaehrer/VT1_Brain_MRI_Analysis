@@ -203,7 +203,7 @@ class ADNIDataset(Dataset):
             patch_label = transformed['label'].data.squeeze(0).long()  # back to [D, H, W]
 
 
-        return patch_img, patch_label
+        return patch_img, patch_label, self.full_paths[idx]["mean"], self.full_paths[idx]["std"]
 
 
 
