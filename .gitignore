@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pt
+*.pth
+*.h5
+*.log
+*.nii
+*.nii.gz
+wandb/
+.vscode/
+.idea/
+.env
+.venv
+data/
