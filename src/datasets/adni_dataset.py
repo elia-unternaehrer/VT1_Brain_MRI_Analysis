@@ -12,7 +12,7 @@ warnings.filterwarnings(
     category=UserWarning
 )
 
-def get_sub_volume(img_path, label_l_path, label_r_path, output_x=32, output_y=32, output_z=32, label_prob=0.9):
+def get_sub_volume(img_path, label_l_path, label_r_path, output_x=32, output_y=32, output_z=32, label_prob=0.9, train_split=True, pad=0):
 
     img = nib.load(img_path)
     data = img.get_fdata()
@@ -30,39 +30,45 @@ def get_sub_volume(img_path, label_l_path, label_r_path, output_x=32, output_y=3
     if label_data.max() > 2:
         raise ValueError("Labels are overlapping.")
     
+    patch_img = None
+    patch_label = None
+    
+    if train_split:
+        orig_x, orig_y, orig_z = data.shape
 
-    orig_x, orig_y, orig_z = data.shape
+        # creat a random number to select the patch
+        prob = np.random.rand()
 
-    # creat a random number to select the patch
-    prob = np.random.rand()
+        # check if the random number is less than the label probability
+        if prob < label_prob:
+            # select the indices of the label data where the label is greater than 0 (not background)
+            indices = np.argwhere(label_data > 0)
 
-    # check if the random number is less than the label probability
-    if prob < label_prob:
-        # select the indices of the label data where the label is greater than 0 (not background)
-        indices = np.argwhere(label_data > 0)
+            # randomly select a indices of a point on the label and use it as the center of the patch
+            center_x, center_y, center_z = indices[np.random.randint(len(indices))]
+        else:
+            # Randomly select a center point for the patch
+            center_x = np.random.randint((output_x // 2), orig_x - (output_x//2) +1)
+            center_y = np.random.randint((output_y//2), orig_y - (output_y//2) +1)
+            center_z = np.random.randint((output_z//2), orig_z - (output_z//2) +1)
 
-        # randomly select a indices of a point on the label and use it as the center of the patch
-        center_x, center_y, center_z = indices[np.random.randint(len(indices))]
+        
+        # Calculate the start indices for the patch & ensure they are within bounds => clip the values to be not less than 0 and not greater than the original shape - output shape
+        start_x = np.clip(center_x - (output_x // 2), 0, orig_x - output_x)
+        start_y = np.clip(center_y - (output_y // 2), 0, orig_y - output_y)
+        start_z = np.clip(center_z - (output_z // 2), 0, orig_z - output_z)
+
+        # select the patch
+        patch_img = data[start_x:start_x + output_x,
+                            start_y:start_y + output_y,
+                            start_z:start_z + output_z]
+        
+        patch_label = label_data[start_x:start_x + output_x,
+                                    start_y:start_y + output_y,
+                                    start_z:start_z + output_z]
     else:
-        # Randomly select a center point for the patch
-        center_x = np.random.randint((output_x // 2), orig_x - (output_x//2) +1)
-        center_y = np.random.randint((output_y//2), orig_y - (output_y//2) +1)
-        center_z = np.random.randint((output_z//2), orig_z - (output_z//2) +1)
-
-    
-    # Calculate the start indices for the patch & ensure they are within bounds => clip the values to be not less than 0 and not greater than the original shape - output shape
-    start_x = np.clip(center_x - (output_x // 2), 0, orig_x - output_x)
-    start_y = np.clip(center_y - (output_y // 2), 0, orig_y - output_y)
-    start_z = np.clip(center_z - (output_z // 2), 0, orig_z - output_z)
-
-    # select the patch
-    patch_img = data[start_x:start_x + output_x,
-                        start_y:start_y + output_y,
-                        start_z:start_z + output_z]
-    
-    patch_label = label_data[start_x:start_x + output_x,
-                                start_y:start_y + output_y,
-                                start_z:start_z + output_z]
+        patch_img = np.pad(data, ((pad,pad), (pad, pad), (pad, pad)), mode='reflect')
+        patch_label = np.pad(label_data, ((pad,pad), (pad, pad), (pad, pad)), mode='reflect')
 
     return patch_img, patch_label
 
@@ -173,6 +179,7 @@ class ADNIDataset(Dataset):
         return len(self.full_paths)
 
     def __getitem__(self, idx):
+
         patch_img, patch_label = get_sub_volume(
             self.full_paths[idx]["img"],
             self.full_paths[idx]["label_l"],
@@ -180,7 +187,9 @@ class ADNIDataset(Dataset):
             output_x=self.patch_size[0],
             output_y=self.patch_size[1],
             output_z=self.patch_size[2],
-            label_prob=self.label_prob
+            label_prob=self.label_prob,
+            train_split=self.train_split,
+            pad=44  # Padding to ensure the receptive field is covered
         )
 
         # Ensure channel dimension: [1, D, H, W]
@@ -201,7 +210,6 @@ class ADNIDataset(Dataset):
             transformed = self.transform(subject)
             patch_img = transformed['img'].data  # [1, D, H, W]
             patch_label = transformed['label'].data.squeeze(0).long()  # back to [D, H, W]
-
 
         return patch_img, patch_label, self.full_paths[idx]["mean"], self.full_paths[idx]["std"]
 

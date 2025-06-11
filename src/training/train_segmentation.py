@@ -83,12 +83,16 @@ def train_loop(epoch, model, optimizer, criterion, data_loader, device, use_wand
             D, H, W = img.shape
 
             # undo normalization
-            img = img * stds[0].item() + means[0].item()  # Assuming means and stds are scalars for simplicity
+            img = img * stds[0].item() + means[0].item()
+
+            # scale image to [0, 255] for visualization
+            img_disp = (img - img.min()) / (img.ptp() + 1e-8)
+            img_disp = (img_disp * 255).astype(np.uint8)
 
             slices = {
-                "axial":   (img[D // 2, :, :], label[D // 2, :, :]),
-                "coronal": (img[:, H // 2, :], label[:, H // 2, :]),
-                "sagittal":(img[:, :, W // 2], label[:, :, W // 2]),
+                "axial":   (img_disp[D // 2, :, :], label[D // 2, :, :]),
+                "coronal": (img_disp[:, H // 2, :], label[:, H // 2, :]),
+                "sagittal":(img_disp[:, :, W // 2], label[:, :, W // 2]),
             }
 
             for plane, (img_slice, label_slice) in slices.items():
@@ -194,7 +198,7 @@ def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loade
             "scheduler": "ReduceLROnPlateau"
         })
 
-    best_val_dice = float(0)
+    best_val_loss = float(0)
     best_model_epoch = 0
     patience = 10
     patience_counter = 0
@@ -233,8 +237,8 @@ def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loade
         scheduler.step(val_loss)
 
         # Early stopping logic
-        if  val_mean_dice_all > best_val_dice + 1e-5:
-            best_val_dice = val_mean_dice_all
+        if  val_loss < best_val_loss + 1e-5:
+            best_val_loss = val_loss
             patience_counter = 0
             best_model_epoch = epoch - 1
 
@@ -261,6 +265,10 @@ def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loade
                 **{f"train_dice_class_{i}": v for i, v in enumerate(train_avg_dices)},
                 **{f"val_dice_class_{i}": v for i, v in enumerate(val_avg_dices)}
             })
+
+    # If using wandb, finish the run
+    if use_wandb:
+        wandb.finish()
 
     # print final results
     print(f"Training:")

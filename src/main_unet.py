@@ -25,7 +25,7 @@ val_set = ADNIDataset(
 
 # create dataloaders
 train_loader = DataLoader(train_set, batch_size=2, shuffle=True, num_workers=4)
-val_loader = DataLoader(val_set, batch_size=2, shuffle=False, num_workers=4)
+val_loader = DataLoader(val_set, batch_size=1, shuffle=False, num_workers=4)
 
 # class_count = np.zeros(3)
 
@@ -56,7 +56,7 @@ train_segmentation(
     weights=class_weights,
     save_path="../models/unet3d_adni.pth",
     use_wandb=True,
-    run_name="test_wandb"
+    run_name="test_new_validation"
 )
 
 #%% ---------------------------------------------------------------------------------
