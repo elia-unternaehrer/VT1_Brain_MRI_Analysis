@@ -1,0 +1,14 @@
+matplotlib==3.10.1
+monai==1.4.0
+nibabel==5.3.2
+numpy==1.26.4
+pandas==2.2.3
+scikit-learn==1.6.1
+scipy==1.15.2
+seaborn==0.13.2
+torch==2.6.0
+torchio==0.20.6
+torchmetrics==1.7.1
+torchvision==0.21.0
+tqdm==4.67.1
+wandb==0.20.1

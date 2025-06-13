@@ -215,5 +215,13 @@ class ADNIDataset(Dataset):
 
 
 
-        
+def create_transform(dataaug_config):
+    transforms = []
+
+    for key in dataaug_config:
+        transforms.append(getattr(tio, key)(**dataaug_config[key]))
+
+    transform = tio.Compose(transforms)
+
+    return transform
 

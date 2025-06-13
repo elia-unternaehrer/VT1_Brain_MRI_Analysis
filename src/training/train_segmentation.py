@@ -1,19 +1,31 @@
 import torch
 from tqdm import tqdm
 from torchmetrics.segmentation import DiceScore
-from utils.plotting import plot_segmentation_results
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from monai.metrics import HausdorffDistanceMetric
 import torch.nn.functional as F
 import numpy as np
 import warnings
 import wandb
+from monai.inferers import sliding_window_inference
 
 warnings.filterwarnings(
     "ignore",
     message=r"the (ground truth|prediction) of class \d+ is all 0, this may result in nan/inf distance\.",
     category=UserWarning
 )
+
+def calculate_output_size(input_size, model):
+    """Calculate the output size for a given input size using your U-Net model"""
+    # Create a dummy input with the specified size
+    dummy_input = torch.zeros((1, 1) + input_size, device=next(model.parameters()).device)
+    
+    # Pass through model
+    with torch.no_grad():
+        dummy_output = model(dummy_input)
+    
+    # Return the output size
+    return dummy_output.shape[2:]  # Spatial dimensions only
 
 def center_crop_label(label, target_shape):
     """
@@ -30,6 +42,8 @@ def center_crop_label(label, target_shape):
     return label[:, d_start:d_start + D_t,
                     h_start:h_start + H_t,
                     w_start:w_start + W_t]
+
+
 
 def train_loop(epoch, model, optimizer, criterion, data_loader, device, use_wandb=False):
     # set model to training mode
@@ -121,7 +135,8 @@ def train_loop(epoch, model, optimizer, criterion, data_loader, device, use_wand
 
     return total_loss, avg_dices, mean_dice_all
 
-def validate_loop(epoch, model, criterion, data_loader, device):
+def validate_loop(epoch, model, criterion, data_loader, device,  patch_size=(136, 152, 128)):
+
     model.eval()
     total_loss = 0.0
 
@@ -131,6 +146,17 @@ def validate_loop(epoch, model, criterion, data_loader, device):
 
     # Initialize Hausdorff distance metric
     hausdorff_metric = HausdorffDistanceMetric(include_background=True, percentile=95, reduction='mean')
+
+    # Calculate expected output size for the given patch size
+    with torch.no_grad():
+        output_size = calculate_output_size(patch_size, model)
+        print(f"Input patch size: {patch_size}, Expected output size: {output_size}")
+    
+     # Calculate how much smaller the output is compared to input
+        padding_diff = tuple(p - o for p, o in zip(patch_size, output_size))
+        padding_per_side = tuple(p // 2 for p in padding_diff)
+        print(f"Size reduction from input to output: {padding_diff}")
+        print(f"Padding needed per side: {padding_per_side}")
 
     with torch.no_grad():  # Disable gradient computation for validation
         for data, target,_ ,_ in tqdm(data_loader, desc=f"Validation Epoch {epoch}"):
@@ -180,26 +206,28 @@ def validate_loop(epoch, model, criterion, data_loader, device):
 
     return total_loss, avg_dices, mean_dice_all, mean_hd95
 
-def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loader, weights=None, save_path=None, use_wandb=False, run_name=None):
+def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loader, weights=None, save_path=None, use_wandb=False, run_name=None, aug_config=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     unet = model.to(device)
     optimizer = torch.optim.Adam(unet.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
 
-    if use_wandb and run_name is not None:
-        wandb.init(project="VT1_Hippocampus_Segmentation", name=run_name,
-        config={
+    config={
             "lr": lr,
             "weight_decay": weight_decay,
             "epochs": epochs,
             "optimizer": "Adam",
             "loss": "CrossEntropyLoss",
-            "scheduler": "ReduceLROnPlateau"
-        })
+            "scheduler": "ReduceLROnPlateau",
+            "augmentation": aug_config
+        }
 
-    best_val_loss = float(0)
-    best_model_epoch = 0
+    if use_wandb and run_name is not None:
+        wandb.init(project="VT1_Hippocampus_Segmentation", name=run_name,
+        config=config)
+
+    best_val_loss = float("inf")
     patience = 10
     patience_counter = 0
 
@@ -226,6 +254,8 @@ def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loade
         train_dices.append(train_avg_dices)
         train_mean_dices.append(train_mean_dice_all)
         
+        torch.cuda.empty_cache()
+
         # Validation
         val_loss, val_avg_dices, val_mean_dice_all, val_mean_hd95 = validate_loop(epoch, unet, criterion, test_loader, device)
         val_losses.append(val_loss)
@@ -233,6 +263,8 @@ def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loade
         val_mean_dices.append(val_mean_dice_all)
         val_hd95s.append(val_mean_hd95)
 
+        torch.cuda.empty_cache()
+        
         # Update the learning rate
         scheduler.step(val_loss)
 
@@ -240,7 +272,6 @@ def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loade
         if  val_loss < best_val_loss + 1e-5:
             best_val_loss = val_loss
             patience_counter = 0
-            best_model_epoch = epoch - 1
 
             # Save the best model checkpoint
             if save_path is not None:
@@ -270,16 +301,3 @@ def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loade
     if use_wandb:
         wandb.finish()
 
-    # print final results
-    print(f"Training:")
-    print(f"    - Loss: {train_losses[best_model_epoch]:.4f}")
-    for i, dice in enumerate(train_dices[best_model_epoch]):
-        print(f"    - Class {i} Dice: {dice:.4f}")
-    print(f"    - Mean Dice across all classes: {train_mean_dices[best_model_epoch]:.4f}\n")
-
-    print(f"Validation")
-    print(f"    - Loss: {val_losses[best_model_epoch]:.4f}")
-    for i, dice in enumerate(val_dices[best_model_epoch]):
-        print(f"    - Class {i} Dice: {dice:.4f}")
-    print(f"    - Mean Dice across all classes: {val_mean_dices[best_model_epoch]:.4f}\n")
-    print(f"    - Mean HD95: {val_hd95s[best_model_epoch]:.4f}\n")
