@@ -8,9 +8,11 @@ __pycache__/
 *.log
 *.nii
 *.nii.gz
+*.submit
 wandb/
 .vscode/
 .idea/
 .env
 .venv
 data/
+logs/
