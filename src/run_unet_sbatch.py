@@ -7,6 +7,10 @@ from torch.utils.data import DataLoader
 
 data_path = "/scratch/ADNI"
 
+#------------------------------------------------------------------------------------------------
+# Baseline with no batchnorm / data augmentation
+#------------------------------------------------------------------------------------------------
+
 # create datasets
 train_set = ADNIDataset(
     folder_path=data_path,
@@ -37,5 +41,93 @@ train_segmentation(
     save_path="/scratch/results/unet3d_adni.pth",
     use_hausdorff=True,
     use_wandb=True,
-    run_name="unet3d_adni_sbatch",
+    run_name="Baseline (no batchnorm)",
+)
+
+#------------------------------------------------------------------------------------------------
+# With data augmentation transform but no augmentation
+#------------------------------------------------------------------------------------------------
+dataaug_config = {
+    "RandomAffine": {
+        "scales": (0.0, 0.0),
+        "degrees": 0,
+        "p": 1
+    },
+    "RandomElasticDeformation": {
+        "num_control_points": 0, 
+        "max_displacement": 0,
+        "p": 1
+    }
+}
+
+
+transform = create_transform(dataaug_config)
+
+# create trainset with augmentation
+train_set = ADNIDataset(
+    folder_path=data_path,
+    split="train",
+    patch_size=(140, 140, 140),
+    label_prob=0.95,
+    transform=transform
+)
+
+train_loader = DataLoader(train_set, batch_size=2, shuffle=True, num_workers=16)
+
+train_segmentation(
+    model=UNet3D(in_channels=1, out_channels=3, base_filters=32),
+    train_loader=train_loader,
+    test_loader=val_loader,
+    epochs=70,
+    lr=1e-4,
+    weight_decay=1e-5,
+    weights=class_weights,
+    save_path="/scratch/results/unet3d_adni.pth",
+    use_hausdorff=True,
+    use_wandb=True,
+    run_name="No Augmentation (with data augmentation transform)",
+)
+
+#------------------------------------------------------------------------------------------------
+# With data augmentation transform and augmentation
+#------------------------------------------------------------------------------------------------
+dataaug_config = {
+    "RandomAffine": {
+        "scales": (0.9, 1.1),
+        "degrees": 10,
+        "p": 1
+    },
+    "RandomElasticDeformation": {
+        "num_control_points": 7, 
+        "max_displacement": 7.5,
+        "p": 1
+    }
+}
+
+
+transform = create_transform(dataaug_config)
+
+# create trainset with augmentation
+train_set = ADNIDataset(
+    folder_path=data_path,
+    split="train",
+    patch_size=(140, 140, 140),
+    label_prob=0.95,
+    transform=transform
+)
+
+train_loader = DataLoader(train_set, batch_size=2, shuffle=True, num_workers=16)
+
+train_segmentation(
+    model=UNet3D(in_channels=1, out_channels=3, base_filters=32),
+    train_loader=train_loader,
+    test_loader=val_loader,
+    epochs=70,
+    lr=1e-4,
+    weight_decay=1e-5,
+    weights=class_weights,
+    save_path="/scratch/results/unet3d_adni.pth",
+    use_hausdorff=True,
+    use_wandb=True,
+    run_name="With Augmentation",
 )

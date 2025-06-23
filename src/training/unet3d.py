@@ -6,10 +6,8 @@ class ConvBlock(nn.Module):
         super(ConvBlock, self).__init__()
         self.block = nn.Sequential(
             nn.Conv3d(in_channels, out_channels, kernel_size=3),
-            nn.BatchNorm3d(out_channels),
             nn.ReLU(inplace=True),
             nn.Conv3d(out_channels, out_channels, kernel_size=3),
-            nn.BatchNorm3d(out_channels),
             nn.ReLU(inplace=True)
         )
 
