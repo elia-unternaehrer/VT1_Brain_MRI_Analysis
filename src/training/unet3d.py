@@ -117,8 +117,8 @@ class MultiClassDiceLoss(nn.Module):
 
     def forward(self, inputs, targets):
         """
-        inputs: raw logits from model, shape [B, C, H, W] or [B, C, D, H, W]
-        targets: class labels, shape [B, H, W] or [B, D, H, W]
+        inputs: raw logits from model, shape [B, C, D, H, W]
+        targets: class labels, shape [B, D, H, W]
         """
         num_classes = inputs.shape[1]
         inputs = F.softmax(inputs, dim=1)
