@@ -112,37 +112,43 @@ class UNet3D(nn.Module):
 class MultiClassDiceLoss(nn.Module):
     def __init__(self, ignore_index=0, smooth=1e-5):
         super().__init__()
-        self.ignore_index = ignore_index
-        self.smooth = smooth
+        self.ignore_index = ignore_index # ingnore background class
+        self.smooth = smooth # prevent division by zero
 
     def forward(self, inputs, targets):
         """
         inputs: raw logits from model, shape [B, C, D, H, W]
         targets: class labels, shape [B, D, H, W]
         """
-        num_classes = inputs.shape[1]
-        inputs = F.softmax(inputs, dim=1)
+        num_classes = inputs.shape[1] # get numb of classes
+        inputs = F.softmax(inputs, dim=1) # convert output into probabilities
 
-        # One-hot encode targets to shape [B, C, ...]
-        targets_onehot = F.one_hot(targets, num_classes=num_classes)  # [B, ..., C]
-        targets_onehot = targets_onehot.permute(0, -1, *range(1, targets.ndim)).float()
+        # One-hot encode targets to shape [B, C, D, H, W]
+        targets_onehot = F.one_hot(targets, num_classes=num_classes)  # [B, D, H, W, C]
+        targets_onehot = targets_onehot.permute(0, -1, *range(1, targets.ndim)).float() # [B, C, D, H, W]
 
         dice = 0.0
         count = 0
 
+        # compute dice per classe
         for c in range(num_classes):
             if c == self.ignore_index:
-                continue
-            input_c = inputs[:, c]
-            target_c = targets_onehot[:, c]
+                continue # ignore bg class
+            input_c = inputs[:, c] # props for class c
+            target_c = targets_onehot[:, c] # label for class c
 
+            # calculate dice components
             intersection = (input_c * target_c).sum()
             union = input_c.sum() + target_c.sum()
+
+            # calculate dice for class and add
             dice += (2. * intersection + self.smooth) / (union + self.smooth)
             count += 1
 
+        # free memory
         del targets_onehot
-        
+
+        # return avg dice loss
         return 1.0 - dice / count
 
 class CombinedLoss(nn.Module):
@@ -153,6 +159,9 @@ class CombinedLoss(nn.Module):
         self.alpha = alpha
 
     def forward(self, inputs, targets):
+        # compute both loss
         ce_loss = self.ce(inputs, targets)
         dice_loss = self.dice(inputs, targets)
+
+        # return weighted combination
         return self.alpha * ce_loss + (1 - self.alpha) * dice_loss
