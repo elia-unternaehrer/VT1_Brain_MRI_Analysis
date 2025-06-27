@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import DataLoader
 #%% ---------------------------------------------------------------------------------
 data_path = "/raid/persistent_scratch/untereli/ADNI"
-
+#%%
 # create datasets
 train_set = ADNIDataset(
     folder_path=data_path,
@@ -33,11 +33,11 @@ train_segmentation(
     model=UNet3D(in_channels=1, out_channels=3, base_filters=32),
     train_loader=train_loader,
     test_loader=val_loader,
-    epochs=3,
+    epochs=5,
     lr=1e-4,
     weight_decay=1e-5,
     weights=class_weights,
-    save_path="/scratch/results/unet3d_adni.pth",
+    combined_loss=True,
     use_wandb=True,
     run_name="test_with_sbatch"
 )
@@ -48,22 +48,14 @@ import torchio as tio
 dataaug_config = {
     "RandomAffine": {
         "scales": (0.9, 1.1),
-        "degrees": 10,
-        "p": 0.75
+        "degrees": 5,
+        "p": 1
     },
     "RandomElasticDeformation": {
         "num_control_points": 7, 
-        "max_displacement": 7.5,
-        "p": 0.5
+        "max_displacement": 7,
+        "p": 1
     },
-    "RandomNoise": {
-        "std": (0, 0.01),
-        "p": 0.25
-    },
-    "RandomBiasField": {
-        "coefficients": 0.5,
-        "p": 0.2
-    }
 }
 
 transform = create_transform(dataaug_config)
@@ -77,6 +69,7 @@ train_set = ADNIDataset(
     transform=transform
 
 )
+#%%
 val_set = ADNIDataset(
     folder_path=data_path,
     split="test",
@@ -92,12 +85,13 @@ train_segmentation(
     model=UNet3D(in_channels=1, out_channels=3, base_filters=32),
     train_loader=train_loader,
     test_loader=val_loader,
-    epochs=70,
+    epochs=5,
     lr=1e-4,
     weight_decay=1e-5,
     weights=class_weights,
-    save_path="/scratch/results/unet3d_adni_dataAug.pth",
     use_wandb=True,
-    run_name="unet3d_adni_dataAug",
+    run_name="unet3d_test_data_aug",
     aug_config=dataaug_config
 )
+
+# %%

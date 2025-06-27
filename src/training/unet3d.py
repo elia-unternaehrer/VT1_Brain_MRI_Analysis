@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -106,3 +107,52 @@ class UNet3D(nn.Module):
         out = self.out_conv(dec3_out)
 
         return out
+    
+
+class MultiClassDiceLoss(nn.Module):
+    def __init__(self, ignore_index=0, smooth=1e-5):
+        super().__init__()
+        self.ignore_index = ignore_index
+        self.smooth = smooth
+
+    def forward(self, inputs, targets):
+        """
+        inputs: raw logits from model, shape [B, C, H, W] or [B, C, D, H, W]
+        targets: class labels, shape [B, H, W] or [B, D, H, W]
+        """
+        num_classes = inputs.shape[1]
+        inputs = F.softmax(inputs, dim=1)
+
+        # One-hot encode targets to shape [B, C, ...]
+        targets_onehot = F.one_hot(targets, num_classes=num_classes)  # [B, ..., C]
+        targets_onehot = targets_onehot.permute(0, -1, *range(1, targets.ndim)).float()
+
+        dice = 0.0
+        count = 0
+
+        for c in range(num_classes):
+            if c == self.ignore_index:
+                continue
+            input_c = inputs[:, c]
+            target_c = targets_onehot[:, c]
+
+            intersection = (input_c * target_c).sum()
+            union = input_c.sum() + target_c.sum()
+            dice += (2. * intersection + self.smooth) / (union + self.smooth)
+            count += 1
+
+        del targets_onehot
+        
+        return 1.0 - dice / count
+
+class CombinedLoss(nn.Module):
+    def __init__(self, weight=None, ignore_index=0, alpha=0.5):
+        super().__init__()
+        self.ce = nn.CrossEntropyLoss(weight=weight)
+        self.dice = MultiClassDiceLoss(ignore_index=ignore_index)
+        self.alpha = alpha
+
+    def forward(self, inputs, targets):
+        ce_loss = self.ce(inputs, targets)
+        dice_loss = self.dice(inputs, targets)
+        return self.alpha * ce_loss + (1 - self.alpha) * dice_loss

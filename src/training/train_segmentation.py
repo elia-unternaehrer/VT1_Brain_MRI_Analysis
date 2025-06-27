@@ -9,6 +9,7 @@ import warnings
 import wandb
 import pandas as pd
 import gc
+from training.unet3d import CombinedLoss, MultiClassDiceLoss
 
 warnings.filterwarnings(
     "ignore",
@@ -185,7 +186,7 @@ def validate_loop(epoch, model, criterion, data_loader, device, dice_metric, hau
 
     return total_loss, avg_dices, mean_dice_all, mean_hd95
 
-def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loader, weights=None, use_hausdorff=False, save_path=None, use_wandb=False, run_name=None, aug_config=None):
+def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loader, weights=None, combined_loss=False, use_hausdorff=False, save_path=None, use_wandb=False, run_name=None, aug_config=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     unet = model.to(device)
@@ -222,7 +223,10 @@ def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loade
         # Convert weights to tensor and move to device
         weights = torch.tensor(weights, dtype=torch.float32).to(device)
 
-    criterion = torch.nn.CrossEntropyLoss(weight=weights)
+    if combined_loss:
+        criterion = CombinedLoss(weight=weights, ignore_index=0, alpha=0.5)
+    else:
+        criterion = MultiClassDiceLoss(ignore_index=0)
 
     for epoch in range(1, epochs + 1):
         
