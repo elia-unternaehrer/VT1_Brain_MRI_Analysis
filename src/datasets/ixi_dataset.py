@@ -31,6 +31,12 @@ def interpolate_to_grid(img_path, mask_path=None, transform_affine=np.eye(4), vo
 
     original_affine = img.affine # affine matrix, that maps voxel coordinates to world coordinates
 
+    #normalize the data
+    non_zero = data[data > 0]
+    mean = np.mean(non_zero)
+    std = np.std(non_zero)
+    data = (data - mean) / std
+
     # ------------------------------------------------------------------------------------------------------
     # we compute the target affine matrix, that maps the target voxel coordinates to world coordinates (values are in world coordinates)
     # the target affine matrix is a diagonal matrix with the desired voxel size in mm in the diagonal

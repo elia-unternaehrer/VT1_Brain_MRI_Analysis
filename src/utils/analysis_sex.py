@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, roc_curve, roc_auc_score
 import torch
-from training.train_sex import validate_loop
 import numpy as np
 
 sns.set_theme(style='white', font_scale=1.2)
@@ -20,14 +19,14 @@ plt.rcParams.update({
     "figure.autolayout": True,
 })
 
-def get_test_result(cnn_model, test_loader):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    cnn_model.to(device)
-    criterion = torch.nn.CrossEntropyLoss()
-    return validate_loop(cnn_model, device, test_loader, criterion)
-
-def plot_confusion_matrix(test_result, threshold=None):
+def plot_confusion_matrix(test_result, threshold=None, save_path=None):
     sns.set_theme(style='white', font_scale=1.2)
+    
+    if threshold is not None:
+        save_path = save_path + "confusion_matrix_optim_thres.png"
+    else:
+        save_path = save_path + "confusion_matrix.png"
+
     y_true = test_result['targets'].numpy()
     y_pred = test_result['predictions'].numpy()
     y_probs = test_result['probabilities'].numpy()
@@ -49,12 +48,17 @@ def plot_confusion_matrix(test_result, threshold=None):
 
     disp.plot(cmap=plt.cm.Blues, values_format='.2f', colorbar=False)
     plt.title("Confusion Matrix", fontsize=20)
-    plt.show()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
 
     print(f"Accuracy: {accuracy:.4f}")
 
-def plot_roc_curve(test_result):
+    
+
+def plot_roc_curve(test_result, save_path=None):
     sns.set_theme(style='white', font_scale=1.2)
+
+    save_path = save_path + "roc_curve.png" if save_path else "roc_curve.png"
 
     y_true = test_result['targets'].numpy()
     y_probs = test_result['probabilities'].numpy()
@@ -106,7 +110,9 @@ def plot_roc_curve(test_result):
     plt.legend(loc='lower right')
     plt.axis('square')
     plt.tight_layout()
-    plt.show()
+
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
 
     return {
         "threshold": opt_thr,

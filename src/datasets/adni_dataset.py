@@ -12,29 +12,14 @@ warnings.filterwarnings(
     category=UserWarning
 )
 
-def get_sub_volume(img_path, label_l_path, label_r_path, output_x=32, output_y=32, output_z=32, label_prob=0.9, train_split=True, pad=0):
+def get_sub_volume(img_data, label_data, output_x=32, output_y=32, output_z=32, label_prob=0.9, train_split=True, pad=0):
 
-    img = nib.load(img_path)
-    data = img.get_fdata()
-
-    label_l = nib.load(label_l_path)
-    label_l_data = label_l.get_fdata()
-
-    label_r = nib.load(label_r_path)
-    label_r_data = label_r.get_fdata()
-
-    # Combine left and right labels
-    label_data = (label_l_data * 2) + label_r_data
-
-    # check that its not overlapping
-    if label_data.max() > 2:
-        raise ValueError("Labels are overlapping.")
-    
+   
     patch_img = None
     patch_label = None
     
     if train_split:
-        orig_x, orig_y, orig_z = data.shape
+        orig_x, orig_y, orig_z = img_data.shape
 
         # creat a random number to select the patch
         prob = np.random.rand()
@@ -59,7 +44,7 @@ def get_sub_volume(img_path, label_l_path, label_r_path, output_x=32, output_y=3
         start_z = np.clip(center_z - (output_z // 2), 0, orig_z - output_z)
 
         # select the patch
-        patch_img = data[start_x:start_x + output_x,
+        patch_img = img_data[start_x:start_x + output_x,
                             start_y:start_y + output_y,
                             start_z:start_z + output_z]
         
@@ -67,7 +52,7 @@ def get_sub_volume(img_path, label_l_path, label_r_path, output_x=32, output_y=3
                                     start_y:start_y + output_y,
                                     start_z:start_z + output_z]
     else:
-        patch_img = np.pad(data, ((pad,pad), (pad, pad), (pad, pad)), mode='reflect')
+        patch_img = np.pad(img_data, ((pad,pad), (pad, pad), (pad, pad)), mode='reflect')
         patch_label = np.pad(label_data, ((pad,pad), (pad, pad), (pad, pad)), mode='reflect')
 
     return patch_img, patch_label
@@ -149,8 +134,9 @@ class ADNIDataset(Dataset):
                 img_nib = nib.load(img_path)
                 img_data = img_nib.get_fdata().astype(np.float32)
 
-                mean = img_data.mean()
-                std = img_data.std()
+                non_zero = img_data[img_data > 0]
+                mean = non_zero.mean()
+                std = non_zero.std()
 
                 if std == 0:
                     std = 1.0
@@ -180,10 +166,44 @@ class ADNIDataset(Dataset):
 
     def __getitem__(self, idx):
 
+        img = nib.load(self.full_paths[idx]["img"])
+        img_data = img.get_fdata()
+
+        label_l = nib.load(self.full_paths[idx]["label_l"])
+        label_l_data = label_l.get_fdata()
+
+        label_r = nib.load(self.full_paths[idx]["label_r"])
+        label_r_data = label_r.get_fdata()
+
+        # Combine left and right labels
+        label_data = (label_l_data * 2) + label_r_data
+
+        # check that its not overlapping
+        if label_data.max() > 2:
+            raise ValueError("Labels are overlapping.")
+
+        # Normalize the image
+        img_data = (img_data - self.full_paths[idx]["mean"]) / self.full_paths[idx]["std"]
+
+        # data augmentation
+        if self.transform is not None:
+            # Convert to tensors
+            img_data = torch.from_numpy(img_data).unsqueeze(0).float()
+            label_data = torch.from_numpy(label_data).unsqueeze(0).long()
+        
+            subject = tio.Subject(
+                img=tio.ScalarImage(tensor=img_data),
+                label=tio.LabelMap(tensor=label_data)  # torchio expects [C, D, H, W]
+            )
+        
+            transformed = self.transform(subject)
+            img_data = transformed['img'].data.squeeze(0).squeeze(0).numpy()
+            label_data = transformed['label'].data.squeeze(0).squeeze(0).numpy()
+
+        # patch extraction
         patch_img, patch_label = get_sub_volume(
-            self.full_paths[idx]["img"],
-            self.full_paths[idx]["label_l"],
-            self.full_paths[idx]["label_r"],
+            img_data=img_data,
+            label_data=label_data,
             output_x=self.patch_size[0],
             output_y=self.patch_size[1],
             output_z=self.patch_size[2],
@@ -192,24 +212,9 @@ class ADNIDataset(Dataset):
             pad=44  # Padding to ensure the receptive field is covered
         )
 
-        # Ensure channel dimension: [1, D, H, W]
-        patch_img = np.expand_dims(patch_img, axis=0)
-
-        # Normalize the image
-        patch_img = (patch_img - self.full_paths[idx]["mean"]) / self.full_paths[idx]["std"]
-
         # Convert to tensors
-        patch_img = torch.from_numpy(patch_img).float()
+        patch_img = torch.from_numpy(patch_img).unsqueeze(0).float()
         patch_label = torch.from_numpy(patch_label).long()
-
-        if self.transform is not None:
-            subject = tio.Subject(
-                img=tio.ScalarImage(tensor=patch_img),
-                label=tio.LabelMap(tensor=patch_label.unsqueeze(0))  # torchio expects [C, D, H, W]
-            )
-            transformed = self.transform(subject)
-            patch_img = transformed['img'].data  # [1, D, H, W]
-            patch_label = transformed['label'].data.squeeze(0).long()  # back to [D, H, W]
 
         return patch_img, patch_label, self.full_paths[idx]["mean"], self.full_paths[idx]["std"]
 

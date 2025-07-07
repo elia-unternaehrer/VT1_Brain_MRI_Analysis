@@ -186,7 +186,7 @@ def validate_loop(epoch, model, criterion, data_loader, device, dice_metric, hau
 
     return total_loss, avg_dices, mean_dice_all, mean_hd95
 
-def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loader, weights=None, combined_loss=False, use_hausdorff=False, save_path=None, use_wandb=False, run_name=None, aug_config=None):
+def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loader, weights=None, loss=None, use_hausdorff=False, save_path=None, use_wandb=False, run_name=None, aug_config=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     unet = model.to(device)
@@ -223,10 +223,15 @@ def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loade
         # Convert weights to tensor and move to device
         weights = torch.tensor(weights, dtype=torch.float32).to(device)
 
-    if combined_loss:
+    if loss == "combined":
+        print("Using CombinedLoss with ignore_index=0 and alpha=0.5")
         criterion = CombinedLoss(weight=weights, ignore_index=0, alpha=0.5)
-    else:
+    elif loss == "dice":
+        print("Using MultiClassDiceLoss with ignore_index=0")
         criterion = MultiClassDiceLoss(ignore_index=0)
+    else:
+        print("Using CrossEntropyLoss")
+        criterion = torch.nn.CrossEntropyLoss(weight=weights)
 
     for epoch in range(1, epochs + 1):
         

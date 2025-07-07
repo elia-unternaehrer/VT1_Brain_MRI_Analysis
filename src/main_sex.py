@@ -1,14 +1,9 @@
 #%% ---------------------------------------------------------------------------------
-from utils.plotting import plot_mri_slices, plot_mri_with_cam
-from utils.analysis_sex import get_test_result, plot_confusion_matrix, plot_roc_curve
 from utils.dataset_splits import create_ixi_dataset_splits
 from utils.gradcam3d import gradcam_visualization
 from training.train_sex import train_sex
 from training.model import Sex3DCNN
 
-
-import matplotlib.pyplot as plt
-import numpy as np
 from torch.utils.data import DataLoader
 import torch
 
@@ -18,8 +13,8 @@ import torch
 
 # dataset config
 shared_args = dict(
-    img_dir="../data/reoriented",
-    metadata_path="../data/IXI.xls",
+    img_dir="../data/IXI/reoriented",
+    metadata_path="../data/IXI/IXI.xls",
     voxel_space=(2.0, 2.0, 2.0),
     target_shape=(128, 128, 128),
     label_type='sex',
@@ -27,8 +22,8 @@ shared_args = dict(
 
 
 train_transform={
-    "rot_range": (-10, 10),
-    "translation_range": (-10, 10)
+    "rot_range": (-5, 5),
+    "translation_range": (-7, 7)
 }
 
 train_set, test_set = create_ixi_dataset_splits(
@@ -50,10 +45,14 @@ train_sex(
     Sex3DCNN(),
     lr=0.0001,
     weight_decay=0.0001,
-    epochs=15,
+    epochs=5,
     train_loader=train_loader,
     test_loader=test_loader,
-    save_path='../models/full_mri_sex_model.pth'
+    save_path_model='../models/full_mri_sex_model.pth',
+    save_path_plots='../logs/',
+    use_wandb=True,
+    run_name='test plots',
+    aug_config=train_transform
 )
 
 #%% ---------------------------------------------------------------------------------
@@ -61,20 +60,6 @@ train_sex(
 
 trained_model = Sex3DCNN()
 trained_model.load_state_dict(torch.load("../models/full_mri_sex_model.pth"))
-
-#%% ---------------------------------------------------------------------------------
-
-## get the results on the test set
-test_result = get_test_result(trained_model, test_loader)
-
-## plot confusion matrix
-plot_confusion_matrix(test_result)
-
-## plot ROC curve
-values = plot_roc_curve(test_result)
-
-## plotconfusion matrix with optimal threshold
-plot_confusion_matrix(test_result, threshold=values['opt_thr'])
 
 
 #%% ---------------------------------------------------------------------------------
@@ -122,27 +107,17 @@ train_sex(
     epochs=15,
     train_loader=train_loader,
     test_loader=test_loader,
-    save_path='../models/bet_mri_sex_model.pth'
+    save_path_model='../models/bet_mri_sex_model.pth',
+    save_path_plots='../logs/',
+    use_wandb=True,
+    run_name='BET MRI Scans',
+    aug_config=train_transform
 )
 
 #%% ---------------------------------------------------------------------------------
 # Load the trained model
 trained_model = Sex3DCNN()
 trained_model.load_state_dict(torch.load('../models/bet_mri_sex_model.pth'))
-
-#%% ---------------------------------------------------------------------------------
-
-## get the results on the test set
-test_result = get_test_result(trained_model, test_loader)
-
-## plot confusion matrix
-plot_confusion_matrix(test_result)
-
-## plot ROC curve
-values = plot_roc_curve(test_result)
-
-## plot confusion matrix with optimal threshold
-plot_confusion_matrix(test_result, threshold=values['threshold'])
 
 #%% ---------------------------------------------------------------------------------
 ## Visualize the MRI slices with Grad-CAM

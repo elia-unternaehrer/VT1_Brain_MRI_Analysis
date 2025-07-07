@@ -8,18 +8,26 @@ import torchio as tio
 
 data_path = "/scratch/ADNI"
 
+val_set = ADNIDataset(
+    folder_path=data_path,
+    split="test"
+)
+
+val_loader = DataLoader(val_set, batch_size=1, shuffle=False, num_workers=16)
+
 dataaug_config = {
     "RandomAffine": {
         "scales": (0.9, 1.1),
-        "degrees": 10,
-        "p": 0.75
+        "degrees": 5,
+        "p": 1
     },
     "RandomElasticDeformation": {
         "num_control_points": 7, 
-        "max_displacement": 7.5,
-        "p": 0.5
+        "max_displacement": 7,
+        "p": 1
     }
 }
+
 
 transform = create_transform(dataaug_config)
 
@@ -32,14 +40,7 @@ train_set = ADNIDataset(
     transform=transform
 )
 
-val_set = ADNIDataset(
-    folder_path=data_path,
-    split="test"
-)
-
-# create dataloaders
 train_loader = DataLoader(train_set, batch_size=2, shuffle=True, num_workers=16)
-val_loader = DataLoader(val_set, batch_size=1, shuffle=False, num_workers=16)
 
 class_weights = torch.tensor([0.1, 0.45, 0.45])
 
@@ -53,7 +54,7 @@ train_segmentation(
     weights=class_weights,
     save_path="/scratch/results/unet3d_adni.pth",
     use_hausdorff=True,
+    loss="combined",
     use_wandb=True,
-    run_name="unet3d_adni_dataAug",
-    aug_config=dataaug_config
+    run_name="Augmentation (combined loss)",
 )

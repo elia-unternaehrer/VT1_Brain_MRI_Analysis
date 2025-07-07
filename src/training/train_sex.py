@@ -3,6 +3,8 @@ from tqdm import tqdm
 import torch
 import utils.plotting as plotting
 from torch.utils.data import DataLoader
+import wandb
+from utils.analysis_sex import plot_confusion_matrix, plot_roc_curve
 
 #%%
 def train_loop(epoch, model, optimizer, device, criterion, data_loader):
@@ -107,13 +109,28 @@ def validate_loop(model, device, data_loader, criterion):
 
 #%%
 
-def train_sex(model, lr, weight_decay, epochs, train_loader, test_loader, save_path=None):
+def train_sex(model, lr, weight_decay, epochs, train_loader, test_loader, save_path_model=None, save_path_plots=None, aug_config=None, use_wandb=False, run_name=None):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     cnn_model = model.to(device)
     optimizer = torch.optim.Adam(cnn_model.parameters(), lr=lr, weight_decay=weight_decay)
     criterion = torch.nn.CrossEntropyLoss()
+
+    config = {
+        "lr": lr,
+        "weight_decay": weight_decay,
+        "epochs": epochs,
+        "optimizer": optimizer.__class__.__name__,
+        "criterion": criterion.__class__.__name__,
+        "model": cnn_model.__class__.__name__,
+        "augmentation": aug_config,  # Assuming no augmentation is applied in this script
+    }
+
+    if use_wandb and run_name is not None:
+        wandb.init(project="VT1_Sex_Classification",
+                   name=run_name,
+                   config=config)
 
     # Keep track of stats to plot them
     train_losses = []
@@ -130,12 +147,25 @@ def train_sex(model, lr, weight_decay, epochs, train_loader, test_loader, save_p
         val_losses.append(val_result["loss"])
         val_accuracies.append(val_result["accuracy"])
 
-    print(f"Training Loss: {train_losses[-1]:.4f}, Training Accuracy: {train_accuracies[-1]:.4f}")
-    print(f"Validation Loss: {val_losses[-1]:.4f}, Validation Accuracy: {val_accuracies[-1]:.4f}")
+        if use_wandb and run_name is not None:
+            wandb.log({
+                "epoch": epoch,
+                "train_loss": train_result["loss"],
+                "train_accuracy": train_result["accuracy"],
+                "val_loss": val_result["loss"],
+                "val_accuracy": val_result["accuracy"]
+            })
 
-    plotting.plot_results(train_losses, train_accuracies, val_losses, val_accuracies)
+    # create plots
+    results = validate_loop(cnn_model, device, test_loader, criterion)
+    plot_confusion_matrix(results, save_path=save_path_plots)
+    roc_values = plot_roc_curve(results, save_path=save_path_plots)
+    plot_confusion_matrix(results, threshold=roc_values["threshold"], save_path=save_path_plots)
 
-    if save_path is not None:
+    if save_path_model is not None:
         # Save the model
-        torch.save(cnn_model.state_dict(), save_path)
-        print(f"Model saved to {save_path}")
+        torch.save(cnn_model.state_dict(), save_path_model)
+        print(f"Model saved to {save_path_model}")
+
+    if use_wandb and run_name is not None:
+        wandb.finish()

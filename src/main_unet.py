@@ -37,7 +37,6 @@ train_segmentation(
     lr=1e-4,
     weight_decay=1e-5,
     weights=class_weights,
-    combined_loss=True,
     use_wandb=True,
     run_name="test_with_sbatch"
 )
@@ -89,8 +88,9 @@ train_segmentation(
     lr=1e-4,
     weight_decay=1e-5,
     weights=class_weights,
+    combined_loss=True,
     use_wandb=True,
-    run_name="unet3d_test_data_aug",
+    run_name="test_data_aug",
     aug_config=dataaug_config
 )
 
