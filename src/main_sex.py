@@ -65,15 +65,15 @@ trained_model.load_state_dict(torch.load("../models/full_mri_sex_model.pth"))
 #%% ---------------------------------------------------------------------------------
 
 ## Visualize the MRI slices with Grad-CAM
-gradcam_visualization(model=trained_model, layer=1, test_loader=test_loader, num_samples_per_class=2)
+gradcam_visualization(model=trained_model, layer=4, test_loader=test_loader, num_samples_per_class=2)
 
 #%% ---------------------------------------------------------------------------------
 
 ## Create dataset with BET MRI scans
 shared_args = dict(
-    img_dir="../data/reoriented",
-    mask_dir="../data/masks",
-    metadata_path="../data/IXI.xls",
+    img_dir="../data/IXI/reoriented",
+    mask_dir="../data/IXI/masks",
+    metadata_path="../data/IXI/IXI.xls",
     voxel_space=(2.0, 2.0, 2.0),
     target_shape=(128, 128, 128),
     label_type='sex',
@@ -122,5 +122,20 @@ trained_model.load_state_dict(torch.load('../models/bet_mri_sex_model.pth'))
 #%% ---------------------------------------------------------------------------------
 ## Visualize the MRI slices with Grad-CAM
 gradcam_visualization(model=trained_model, test_loader=test_loader, num_samples_per_class=2)
+
+# %%
+
+from utils.plotting import plot_mri_slices
+
+# Create an iterator for the test loader
+test_iter = iter(test_loader)
+# Get the next batch
+batch = next(test_iter)
+# Extract the image and label
+image, label = batch
+# Take the first image from the batch (since batch_size is 1, this is just to be safe)
+single_image = image[0]  # Shape: [C, H, W, D]
+
+plot_mri_slices(single_image.squeeze().cpu().numpy())
 
 # %%
