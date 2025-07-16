@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from collections import Counter
 import torch
 import seaborn as sns
+import numpy as np
 
 plt.rcParams.update({
     "text.usetex":       False,
@@ -166,6 +167,92 @@ def plot_sex_distribution(dataset, title="Sex Distribution"):
     plt.grid(axis="y", linestyle="--", alpha=0.6)
     plt.tight_layout()
     plt.show()
+
+def plot_true_vs_pred_identity(true_ages, pred_ages, figsize=(6, 6), save_path=None):
+    """
+    Scatter‐plot True vs. Predicted ages with the identity line y = x.
+    
+    Parameters
+    ----------
+    true_ages : array‐like of shape (n_samples,)
+        The ground‐truth ages.
+    pred_ages : array‐like of shape (n_samples,)
+        The ages predicted by the model.
+    figsize : tuple of two ints, default=(6, 6)
+        Figure size in inches.
+    """
+
+    save_path = save_path + "identity.png" if save_path else "identity.png"
+
+    true_ages = np.asarray(true_ages)
+    pred_ages = np.asarray(pred_ages)
+
+    # determine plotting range
+    lo = min(true_ages.min(), pred_ages.min())
+    hi = max(true_ages.max(), pred_ages.max())
+
+    # create figure
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.scatter(true_ages, pred_ages, alpha=0.6, edgecolors='k')
+    ax.plot([lo, hi], [lo, hi], 'r--', linewidth=1, label='Ideal (y=x)')
+
+    ax.set_xlabel('True Age (years)')
+    ax.set_ylabel('Predicted Age (years)')
+    ax.set_title('True vs. Predicted Age (Identity Line)')
+    ax.axis('square')
+    ax.set_xlim(lo, hi)
+    ax.set_ylim(lo, hi)
+    ax.grid(alpha=0.3)
+    ax.legend()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def plot_true_vs_pred_regression(true_ages, pred_ages, figsize=(6, 6), save_path=None):
+    """
+    Scatter‐plot True vs. Predicted ages with both the identity line and 
+    a fitted linear regression line.
+    
+    Parameters
+    ----------
+    true_ages : array‐like of shape (n_samples,)
+        The ground‐truth ages.
+    pred_ages : array‐like of shape (n_samples,)
+        The ages predicted by the model.
+    figsize : tuple of two ints, default=(6, 6)
+        Figure size in inches.
+    """
+    save_path = save_path + "identity_regression.png" if save_path else "identity_regression.png"
+
+    true_ages = np.asarray(true_ages)
+    pred_ages = np.asarray(pred_ages)
+
+    # determine plotting range
+    lo = min(true_ages.min(), pred_ages.min())
+    hi = max(true_ages.max(), pred_ages.max())
+
+    # fit regression
+    slope, intercept = np.polyfit(true_ages, pred_ages, 1)
+    fit_x = np.array([lo, hi])
+    fit_y = slope * fit_x + intercept
+
+    # create figure
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.scatter(true_ages, pred_ages, alpha=0.6, edgecolors='k')
+    ax.plot([lo, hi], [lo, hi], 'r--', linewidth=1, label='Ideal (y=x)')
+    ax.plot(fit_x, fit_y,    'b-', linewidth=2,
+            label=f'Fit: y = {slope:.2f} x + {intercept:.2f}')
+
+    ax.set_xlabel('True Age (years)')
+    ax.set_ylabel('Predicted Age (years)')
+    ax.set_title('True vs. Predicted Age (Regression Fit)')
+    ax.axis('square')
+    ax.set_xlim(lo, hi)
+    ax.set_ylim(lo, hi)
+    ax.grid(alpha=0.3)
+    ax.legend()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
 
 
 

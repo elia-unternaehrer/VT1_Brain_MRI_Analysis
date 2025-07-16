@@ -16,3 +16,4 @@ wandb/
 .venv
 data/
 logs/
+plots/
