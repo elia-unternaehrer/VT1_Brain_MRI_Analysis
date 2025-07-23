@@ -14,5 +14,8 @@ wandb/
 .env
 .venv
 data/
+Data/
 logs/
 plots/
+.python-version
+vt1_mri/
