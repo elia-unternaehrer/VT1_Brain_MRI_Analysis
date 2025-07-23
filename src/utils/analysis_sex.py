@@ -19,6 +19,10 @@ plt.rcParams.update({
     "figure.autolayout": True,
 })
 
+############################################################
+# Function to plot confusion matrix                        #
+############################################################
+
 def plot_confusion_matrix(test_result, threshold=None, save_path=None):
     sns.set_theme(style='white', font_scale=1.2)
     
@@ -53,7 +57,9 @@ def plot_confusion_matrix(test_result, threshold=None, save_path=None):
 
     print(f"Accuracy: {accuracy:.4f}")
 
-    
+############################################################
+# Function to plot ROC Curve                               #
+############################################################
 
 def plot_roc_curve(test_result, save_path=None):
     sns.set_theme(style='white', font_scale=1.2)
@@ -120,14 +126,3 @@ def plot_roc_curve(test_result, save_path=None):
         "tpr": tpr,
         "auc": auc,
     }
-
-def plot_probability_histogram(test_result):
-    y_probs = test_result['probabilities'].numpy()
-    plt.hist(y_probs[:,1], bins=50, color='orange', alpha=0.6, label="female")
-    plt.hist(y_probs[:,0], bins=50, color='blue', alpha=0.6, label="male")
-    plt.title("Histogram of Predicted Probabilities", fontsize=20)
-    plt.xlabel("Predicted Probability")
-    plt.ylabel("Count")
-    plt.xlim(0, 1)
-    plt.legend()
-    plt.show()

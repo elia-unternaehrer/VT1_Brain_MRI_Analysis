@@ -1,12 +1,14 @@
-#%%
 from tqdm import tqdm
 import torch
 import numpy as np
 from sklearn.metrics import r2_score, mean_absolute_error
 import wandb
-from utils.plotting import plot_true_vs_pred_identity, plot_true_vs_pred_regression
+from utils.plotting import plot_true_vs_pred_regression
 
-#%%
+############################################################
+# Train Loop for Age Prediction                            #
+############################################################
+
 def train_loop(epoch, model, optimizer, device, criterion, data_loader, log_interval=200):
     # Set model to training mode
     model.train()
@@ -59,7 +61,9 @@ def train_loop(epoch, model, optimizer, device, criterion, data_loader, log_inte
         "mae": mae,
     }
 
-#%%
+############################################################
+# Validation Loop for Age Prediction                       #
+############################################################
 
 @torch.inference_mode()
 def validate_loop(model, device, data_loader, criterion):
@@ -98,7 +102,9 @@ def validate_loop(model, device, data_loader, criterion):
         "targets": targets,
     }
 
-#%%
+############################################################
+# Function handling the full Training                      #
+############################################################
 
 def train_age(model, lr, weight_decay, epochs, train_loader, test_loader, save_path_model=None, save_path_plots=None, aug_config=None, use_wandb=False, run_name=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -163,5 +169,4 @@ def train_age(model, lr, weight_decay, epochs, train_loader, test_loader, save_p
     result = validate_loop(cnn_model, device, test_loader, criterion)
     targets = np.array(result["targets"]).flatten()
     preds = np.array(result["predictions"]).flatten()
-    plot_true_vs_pred_identity(targets, preds, save_path=save_path_plots)
     plot_true_vs_pred_regression(targets, preds, save_path=save_path_plots)

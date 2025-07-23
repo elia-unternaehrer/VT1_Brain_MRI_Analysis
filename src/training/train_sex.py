@@ -1,4 +1,3 @@
-#%%
 from tqdm import tqdm
 import torch
 import utils.plotting as plotting
@@ -6,7 +5,10 @@ from torch.utils.data import DataLoader
 import wandb
 from utils.analysis_sex import plot_confusion_matrix, plot_roc_curve
 
-#%%
+############################################################
+# Train Loop for Sex Classification                        #
+############################################################
+
 def train_loop(epoch, model, optimizer, device, criterion, data_loader):
     # Set model to training mode
     model.train()
@@ -54,7 +56,9 @@ def train_loop(epoch, model, optimizer, device, criterion, data_loader):
         "accuracy": accuracy_train,
     }
 
-#%%
+############################################################
+# Validation Loop for Sex Classification                   #
+############################################################
 
 @torch.inference_mode()
 def validate_loop(model, device, data_loader, criterion):
@@ -107,7 +111,9 @@ def validate_loop(model, device, data_loader, criterion):
         "outputs": torch.cat(total_outputs),
     }
 
-#%%
+############################################################
+# Function handling the full training                      #
+############################################################
 
 def train_sex(model, lr, weight_decay, epochs, train_loader, test_loader, save_path_model=None, save_path_plots=None, aug_config=None, use_wandb=False, run_name=None):
 

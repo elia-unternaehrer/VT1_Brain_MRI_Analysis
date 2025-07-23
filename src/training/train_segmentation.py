@@ -34,6 +34,9 @@ def center_crop_label(label, target_shape):
                     w_start:w_start + W_t]
 
 
+############################################################
+# Train Loop for Hippocampus Segmentation                  #
+############################################################
 
 def train_loop(epoch, model, optimizer, criterion, data_loader, device, dice_metric, use_wandb=False):
     # set model to training mode
@@ -121,6 +124,10 @@ def train_loop(epoch, model, optimizer, criterion, data_loader, device, dice_met
 
     return total_loss, avg_dices, mean_dice_all
 
+############################################################
+# Validation Loop for Hippocampus Segmentation             #
+############################################################
+
 def validate_loop(epoch, model, criterion, data_loader, device, dice_metric, hausdorff_metric=None):
 
     model.eval()
@@ -185,6 +192,10 @@ def validate_loop(epoch, model, criterion, data_loader, device, dice_metric, hau
     print(result)
 
     return total_loss, avg_dices, mean_dice_all, mean_hd95
+
+############################################################
+# Function handling the full training                      #
+############################################################
 
 def train_segmentation(model, lr, weight_decay, epochs, train_loader, test_loader, weights=None, loss=None, use_hausdorff=False, save_path=None, use_wandb=False, run_name=None, aug_config=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

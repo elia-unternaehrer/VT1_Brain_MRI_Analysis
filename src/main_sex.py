@@ -1,31 +1,36 @@
-#%% ---------------------------------------------------------------------------------
 from utils.dataset_splits import create_ixi_dataset_splits
 from utils.gradcam3d import gradcam_visualization
 from training.train_sex import train_sex
-from training.model import Sex3DCNN
+from training.models import Sex3DCNN
 
 from torch.utils.data import DataLoader
 import torch
 
-#%% ---------------------------------------------------------------------------------
+# Define paths for data, metadata, and masks
+data_path = "/scratch/IXI/reoriented"
+metadata_path = "/scratch/IXI/IXI.xls"
+mask_path = "/scratch/IXI/masks"
 
-## Create dataset with full MRI scans
+############################################################
+# Create Dataset and DataLoaders                           #
+############################################################
 
 # dataset config
 shared_args = dict(
-    img_dir="../data/IXI/reoriented",
-    metadata_path="../data/IXI/IXI.xls",
+    img_dir=data_path,
+    metadata_path=metadata_path,
     voxel_space=(2.0, 2.0, 2.0),
     target_shape=(128, 128, 128),
     label_type='sex',
 )
 
-
+# Data augmentation
 train_transform={
     "rot_range": (-5, 5),
     "translation_range": (-7, 7)
 }
 
+# Create dataset splits
 train_set, test_set = create_ixi_dataset_splits(
     shared_args,
     train_transform=train_transform,
@@ -39,52 +44,58 @@ train_set, test_set = create_ixi_dataset_splits(
 train_loader = DataLoader(train_set, batch_size=1, shuffle=True, num_workers=16)
 test_loader = DataLoader(test_set, batch_size=1, shuffle=False, num_workers=16)
 
-#%% ---------------------------------------------------------------------------------
-# train the model with full MRI scanns
+############################################################
+# Baseline (Full Head) Model                               #
+############################################################
+
 train_sex(
     Sex3DCNN(),
     lr=0.0001,
     weight_decay=0.0001,
-    epochs=5,
+    epochs=40,
     train_loader=train_loader,
     test_loader=test_loader,
-    save_path_model='../models/full_mri_sex_model.pth',
-    save_path_plots='../logs/',
+    save_path_model='../models/R1_FullHead.pth',
+    save_path_plots='../logs/R1_FullHead/',
     use_wandb=True,
-    run_name='test plots',
+    run_name='R1: Full Head Scans',
     aug_config=train_transform
 )
 
-#%% ---------------------------------------------------------------------------------
+############################################################
+# GradCam Visualization                                    #
+############################################################
+
 # Load the trained model
-
 trained_model = Sex3DCNN()
-trained_model.load_state_dict(torch.load("../models/full_mri_sex_model.pth"))
+trained_model.load_state_dict(torch.load("../models/R1_FullHead.pth"))
 
-
-#%% ---------------------------------------------------------------------------------
 
 ## Visualize the MRI slices with Grad-CAM
 gradcam_visualization(model=trained_model, layer=4, test_loader=test_loader, num_samples_per_class=2)
 
-#%% ---------------------------------------------------------------------------------
 
-## Create dataset with BET MRI scans
+############################################################
+# Create Dataset and DataLoaders for BET Scans             #
+############################################################
+
+# dataset config
 shared_args = dict(
-    img_dir="../data/IXI/reoriented",
-    mask_dir="../data/IXI/masks",
-    metadata_path="../data/IXI/IXI.xls",
+    img_dir=data_path,
+    mask_dir=mask_path,
+    metadata_path=metadata_path,
     voxel_space=(2.0, 2.0, 2.0),
     target_shape=(128, 128, 128),
     label_type='sex',
 )
 
-
+# Data augmentation
 train_transform={
     "rot_range": (-10, 10),
     "translation_range": (-10, 10)
 }
 
+# Create dataset splits
 train_set, test_set = create_ixi_dataset_splits(
     shared_args,
     train_transform=train_transform,
@@ -98,44 +109,20 @@ train_set, test_set = create_ixi_dataset_splits(
 train_loader = DataLoader(train_set, batch_size=1, shuffle=True, num_workers=16)
 test_loader = DataLoader(test_set, batch_size=1, shuffle=False, num_workers=16)
 
-#%% ---------------------------------------------------------------------------------
-# train the model with BET MRI scanns
+############################################################
+# Brain Extracted Model                                    #
+############################################################
+
 train_sex(
     Sex3DCNN(),
     lr=0.0001,
     weight_decay=0.0001,
-    epochs=15,
+    epochs=40,
     train_loader=train_loader,
     test_loader=test_loader,
-    save_path_model='../models/bet_mri_sex_model.pth',
-    save_path_plots='../logs/',
+    save_path_model='../models/R2_BrainExtracted.pth',
+    save_path_plots='../logs/R2_BrainExtracted/',
     use_wandb=True,
-    run_name='BET MRI Scans',
+    run_name='R2: Brain Extracted Scans',
     aug_config=train_transform
 )
-
-#%% ---------------------------------------------------------------------------------
-# Load the trained model
-trained_model = Sex3DCNN()
-trained_model.load_state_dict(torch.load('../models/bet_mri_sex_model.pth'))
-
-#%% ---------------------------------------------------------------------------------
-## Visualize the MRI slices with Grad-CAM
-gradcam_visualization(model=trained_model, test_loader=test_loader, num_samples_per_class=2)
-
-# %%
-
-from utils.plotting import plot_mri_slices
-
-# Create an iterator for the test loader
-test_iter = iter(test_loader)
-# Get the next batch
-batch = next(test_iter)
-# Extract the image and label
-image, label = batch
-# Take the first image from the batch (since batch_size is 1, this is just to be safe)
-single_image = image[0]  # Shape: [C, H, W, D]
-
-plot_mri_slices(single_image.squeeze().cpu().numpy())
-
-# %%
