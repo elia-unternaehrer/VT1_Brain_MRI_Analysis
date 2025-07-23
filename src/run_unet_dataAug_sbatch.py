@@ -1,5 +1,5 @@
 from datasets.adni_dataset import ADNIDataset, create_transform
-from training.unet3d import UNet3D
+from training.unet3d import UNet3DBatchNorm
 from training.train_segmentation import train_segmentation
 
 import torch
@@ -45,16 +45,17 @@ train_loader = DataLoader(train_set, batch_size=2, shuffle=True, num_workers=16)
 class_weights = torch.tensor([0.1, 0.45, 0.45])
 
 train_segmentation(
-    model=UNet3D(in_channels=1, out_channels=3, base_filters=32),
+    model=UNet3DBatchNorm(in_channels=1, out_channels=3, base_filters=32),
     train_loader=train_loader,
     test_loader=val_loader,
     epochs=70,
     lr=1e-4,
     weight_decay=1e-5,
     weights=class_weights,
-    save_path="/scratch/results/unet3d_adni.pth",
-    use_hausdorff=True,
-    loss="combined",
+    loss="dice",
+    save_path="/scratch/results/unet3d_dice_BatchNorm_data_aug.pth",
+    use_hausdorff=False,
     use_wandb=True,
-    run_name="Augmentation (combined loss)",
+    run_name="Dice_BatchNorm_DataAug_test",
+    aug_config=dataaug_config
 )
