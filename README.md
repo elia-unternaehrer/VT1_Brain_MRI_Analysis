@@ -1,25 +1,17 @@
-# VT1: Brain MRI Analysis
-This project is part of my Master’s studies in the **MSE Data Science program** at the **ZHAW Center for Artificial Intelligence**.
-
-The goal of this project is to explore and implement deep learning techniques on brain MRI data, using two datasets: **IXI** and **ADNI**.
+# VT1: Deep Learning for Brain MRI Analysis
+This repository contains code for **VT1: Deep Learning for Brain MRI Analysis**, a Master’s project in the **MSE Data Science program** at the **ZHAW Center for Artificial Intelligence**. We explore deep learning techniques on 3D brain MRI data, tackling both predictive modeling and segmentation tasks.
 
 ## Project Overview
-The project is divided into two main tasks:
+We developed three core models on two public datasets, with a real-time preprocessing pipeline underpinning all tasks:
 
-### 1. **MRI-Based Prediction (IXI Dataset)**
-- Built two CNN models:
-  - **Sex classification**
-  - **Age regression**
-- Developed a **custom "preprocessing" pipeline** that:
-  - Fixes scan orientation
-  - Converts scans to isotropic voxel space
-  - Centers volumes on a fixed 3D grid
-  - Integrates on-the-fly spatial augmentations (scaling, rotation, translation)
-  
-  > The preprocessing is designed for **real-time data augmentation** and is applied during data loading rather than offline preprocessing.
+1. **Sex Classification (IXI Dataset)** \
+Our simple 3D CNN achieved near-perfect accuracy on full-head T1-weighted MRIs, but accuracy fell to ~80% when trained on brain-extracted scans, demonstrating that non-brain features (e.g. facial structures, skull shape) were driving much of the performance.
 
-### 2. **Hippocampus Segmentation (ADNI Dataset)**
-- Implemented a **U-Net** to segment the **left and right hippocampus** from 3D brain MRIs.
+2. **Age Regression (IXI Dataset)** \
+The baseline 3D CNN (full-head scans) yielded an MAE of 7.79 years; brain extraction caused only a modest performance drop, and neither increasing model capacity nor higher input resolution improved upon this baseline.
+
+3. **Hippocampus Segmentation (ADNI Dataset)** \
+After exploring normalization layers and loss functions, the best configuration (3D U-Net with BatchNorm, Dice loss and data augmentation) achieved a Dice score of 0.77 for both hippocampi and a 95th-percentile Hausdorff distance (HD95) of 5.15 mm.
 
 ## Project Structure
 ```
@@ -32,10 +24,12 @@ src/
 └── main_unet.py # Main script for hippocampus segmentation
 ```
 
-## Datasets
-- **IXI** dataset: https://brain-development.org/ixi-dataset/
-- **ADNI** dataset: https://adni.loni.usc.edu/
+## References
 
-
-## Work in Progress
-This repository is still actively evolving.
+- **IXI dataset**: https://brain-development.org/ixi-dataset/  
+- **ADNI dataset**: https://adni.loni.usc.edu/  
+- **HD-BET:**
+Isensee F, Schell M, Tursunova I, Brugnara G, Bonekamp D, Neuberger U, Wick A,
+Schlemmer HP, Heiland S, Wick W, Bendszus M, Maier-Hein KH, Kickingereder P.
+Automated brain extraction of multi-sequence MRI using artificial neural
+networks. Hum Brain Mapp. 2019; 1–13. https://doi.org/10.1002/hbm.24750
